@@ -2,47 +2,51 @@ pipeline {
     agent any
     
     environment {
-        registry = "venkats061/demo"
-        dockerImage = ''
-        // Define credentials for GitHub and DockerHub
-        githubCredential = 'github-venkatsatish07'
-        dockerHubCredential = 'dockerhub-venkats061'
+        // Define environment variables as needed
+        registryCredential = 'dockerhub-credentials' // This should match your DockerHub credentials in Jenkins
+        dockerImage = 'venkats061/demo:latest' // Your DockerHub repository and image name
+        kubernetesNamespace = 'default' // Adjust to your Kubernetes namespace
+        kubernetesDeployFile = 'deployment.yaml' // Name of your Kubernetes deployment file
+        kubernetesServiceFile = 'service.yaml' // Name of your Kubernetes service file
     }
     
     stages {
         stage('Checkout') {
             steps {
-                checkout([$class: 'GitSCM',
-                          branches: [[name: '*/main']],
-                          doGenerateSubmoduleConfigurations: false,
-                          extensions: [],
-                          submoduleCfg: [],
-                          userRemoteConfigs: [[credentialsId: 'github-venkatsatish07',
-                                               url: 'https://github.com/venkatsatish07/demonstrating-our-Jenkins-job-CI-CD-Pipeline.git']]])
+                // Checkout code from your Git repository
+                git credentialsId: 'github-venkatsatish07', url: 'https://github.com/venkatsatish07/demonstrating-our-Jenkins-job-CI-CD-Pipeline.git'
             }
         }
         
-        stage('Build') {
+        stage('Build with Maven') {
             steps {
+                // Configure Maven tool installation
                 script {
-                    def mvnHome = tool 'Maven 3.8.4'
-                    sh "${mvnHome}/bin/mvn clean package -DskipTests"
+                    def mvnHome = tool name: 'Maven-3.8.4', type: 'maven'
+                    env.PATH = "${mvnHome}/bin:${env.PATH}"
                 }
+                // Run Maven build
+                sh "mvn clean package"
             }
         }
         
         stage('Build Docker Image') {
             steps {
+                // Build Docker image
                 script {
-                    dockerImage = docker.build registry + ":latest"
+                    docker.withRegistry('https://registry.hub.docker.com', registryCredential) {
+                        def customImage = docker.build(dockerImage)
+                        customImage.push()
+                    }
                 }
             }
         }
         
         stage('Push to DockerHub') {
             steps {
+                // Push Docker image to DockerHub
                 script {
-                    docker.withRegistry('https://registry.hub.docker.com', dockerHubCredential) {
+                    docker.withRegistry('https://registry.hub.docker.com', registryCredential) {
                         dockerImage.push()
                     }
                 }
@@ -51,22 +55,19 @@ pipeline {
         
         stage('Deploy to Kubernetes') {
             steps {
+                // Deploy to Kubernetes using kubectl
                 script {
-                    // Update deployment.yaml with new image tag
-                    sh "sed -i 's#image: venkats061/demo:latest#image: ${registry}:latest#' deployment.yaml"
-                    // Apply deployment to Kubernetes
-                    sh "kubectl apply -f deployment.yaml"
+                    kubeconfig = credentials('kubernetes-credentials') // Assuming you have Kubernetes credentials configured in Jenkins
+                    
+                    sh "kubectl apply -f ${kubernetesDeployFile} -f ${kubernetesServiceFile} --kubeconfig=${kubeconfig}"
                 }
             }
         }
     }
     
     post {
-        success {
-            echo 'Pipeline successfully completed!'
-        }
-        failure {
-            echo 'Pipeline failed!'
+        always {
+            echo 'Pipeline completed!'
         }
     }
 }
