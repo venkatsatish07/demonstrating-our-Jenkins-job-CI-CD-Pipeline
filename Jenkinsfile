@@ -14,7 +14,7 @@ pipeline {
         stage('Checkout') {
             steps {
                 // Checkout code from your Git repository
-                git credentialsId: 'github-venkatsatish07', url: 'https://github.com/venkatsatish07/demonstrating-our-Jenkins-job-CI-CD-Pipeline.git'
+                git branch: 'main', credentialsId: 'github-venkatsatish07', url: 'https://github.com/venkatsatish07/demonstrating-our-Jenkins-job-CI-CD-Pipeline.git'
             }
         }
         
